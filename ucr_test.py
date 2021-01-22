@@ -1,4 +1,5 @@
 import os
+import time
 import json
 import math
 import torch
@@ -141,17 +142,27 @@ def get_config():
 
     # config = parser.parse_known_args()[0]
     config = parser.parse_args(args=[])
-    print(config)
+    # print(config)
     
     return config
 
 
 def main(**kwargs):
     
+    # start time
+    start_time = time.time()
+    print('Start: ', time.strftime('%Y-%m-%d %H:%M:%S',time.localtime(time.time())))
+
+    # get config
     args = get_config()
     for k in kwargs:
         args.__dict__[k] = kwargs[k]
     print(args)
+
+    # create output dir
+    args.save_path = args.save_path + '/' + args.dataset
+    if not os.path.exists(args.save_path):
+        os.mkdir(args.save_path)
 
     if args.cuda and not torch.cuda.is_available():
         print("CUDA is not available, proceeding without it...")
@@ -193,10 +204,17 @@ def main(**kwargs):
 
     print("Test accuracy: " + str(classifier.score(test, test_labels)))
 
+    # end time
+    end_time = time.time()
+    print('End: ', time.strftime('%Y-%m-%d %H:%M:%S',time.localtime(time.time())))
+    # time consumed
+    print('Took %f seconds' % (end_time - start_time))
+
 
 if __name__ == "__main__":
     
-    main(dataset='Mallat', path='./', save_path='output')
+    main(dataset='Mallat', path='datasets/UCR/UCRArchive_2018', save_path='output')
 
-    main(dataset='Mallat', path='./', save_path='output', cuda=True, gpu=0)
+    main(dataset='Chinatown', path='datasets/UCR/UCRArchive_2018', save_path='output', 
+         cuda=True, gpu=0)
 
