@@ -125,7 +125,7 @@ def get_config():
 
     parser.add_argument('--dataset', type=str, default='data', help='dataset name')
     parser.add_argument('--path', type=str, default='./', help='path where the dataset is located')
-    parser.add_argument('--save_path', type=str, default='./output/', 
+    parser.add_argument('--save_path', type=str, default='output', 
                         help='path where the estimator is/should be saved')
     
     parser.add_argument('--cuda', action='store_true', default=False, help='activate to use CUDA')
