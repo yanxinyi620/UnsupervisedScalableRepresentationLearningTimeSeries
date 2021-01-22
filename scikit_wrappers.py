@@ -28,6 +28,8 @@ import utils
 import losses
 import networks
 
+import joblib
+
 
 class TimeSeriesEncoderClassifier(sklearn.base.BaseEstimator,
                                   sklearn.base.ClassifierMixin):
@@ -110,7 +112,7 @@ class TimeSeriesEncoderClassifier(sklearn.base.BaseEstimator,
                '$(prefix_file)_$(architecture)_encoder.pth').
         """
         self.save_encoder(prefix_file)
-        sklearn.externals.joblib.dump(
+        joblib.dump(
             self.classifier,
             prefix_file + '_' + self.architecture + '_classifier.pkl'
         )
