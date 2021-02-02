@@ -202,100 +202,43 @@ def main(**kwargs):
 if __name__ == "__main__":
     
     main(dataset='BasicMotions', path='datasets/UEA/Multivariate2018_arff', save_path='output')
-
     main(dataset='BasicMotions', path='datasets/UEA/Multivariate2018_arff', save_path='output', 
          cuda=True, gpu=0)
 
 
 
 
+# -----------------------------------------------
+# get config
+args = get_config()
+args.dataset = 'BasicMotions'
+args.path = 'datasets/UEA/Multivariate2018_arff'
+args.cuda = True
+print(args)
 
-def load_weka_dataset(path, dataset):
+train, train_labels, test, test_labels = load_UEA_dataset(args.path, args.dataset)
 
-    # Initialization needed to load a file with Weka wrappers
-    weka.core.jvm.start()
-    loader = weka.core.converters.Loader(
-        classname="weka.core.converters.ArffLoader"
-    )
+# classifier = fit_hyperparameters(args.hyper, train, train_labels, args.cuda, args.gpu, 
+#                                  save_memory=True)
 
-    train_file = os.path.join(path, dataset, dataset + "_TRAIN.arff")
-    test_file = os.path.join(path, dataset, dataset + "_TEST.arff")
-    train_weka = loader.load_file(train_file)
-    test_weka = loader.load_file(test_file)
+classifier = scikit_wrappers.CausalCNNEncoderClassifier()
+# Loads a given set of hyperparameters and fits a model with those
+hf = open(os.path.join(args.hyper), 'r')
+params = json.load(hf)
+hf.close()
+# Check the number of input channels
+params['in_channels'] = numpy.shape(train)[1]
+params['cuda'] = args.cuda
+params['gpu'] = args.gpu
+classifier.set_params(**params)
+# fit
+classifier.fit(train, train_labels, save_memory=False, verbose=True)
 
-    train_size = train_weka.num_instances
-    test_size = test_weka.num_instances
-    nb_dims = train_weka.get_instance(0).get_relational_value(0).num_instances
-    length = train_weka.get_instance(0).get_relational_value(0).num_attributes
-
-    train = numpy.empty((train_size, nb_dims, length))
-    test = numpy.empty((test_size, nb_dims, length))
-    train_labels = numpy.empty(train_size, dtype=numpy.int)
-    test_labels = numpy.empty(test_size, dtype=numpy.int)
-
-    for i in range(train_size):
-        train_labels[i] = int(train_weka.get_instance(i).get_value(1))
-        time_series = train_weka.get_instance(i).get_relational_value(0)
-        for j in range(nb_dims):
-            train[i, j] = time_series.get_instance(j).values
-
-    for i in range(test_size):
-        test_labels[i] = int(test_weka.get_instance(i).get_value(1))
-        time_series = test_weka.get_instance(i).get_relational_value(0)
-        for j in range(nb_dims):
-            test[i, j] = time_series.get_instance(j).values
-
-    weka.core.jvm.stop()
-    return train, test
-
-
-def norm_UEA_dataset(train, train_labels, test, test_labels):
-
-    # Normalizing dimensions independently
-    nb_dims = train.shape[1]
-    for j in range(nb_dims):
-        # Post-publication note:
-        # Using the testing set to normalize might bias the learned network,
-        # but with a limited impact on the reported results on few datasets.
-        # See the related discussion here: https://github.com/White-Link/UnsupervisedScalableRepresentationLearningTimeSeries/pull/13.
-        mean = numpy.mean(numpy.concatenate([train[:, j], test[:, j]]))
-        var = numpy.var(numpy.concatenate([train[:, j], test[:, j]]))
-        train[:, j] = (train[:, j] - mean) / math.sqrt(var)
-        test[:, j] = (test[:, j] - mean) / math.sqrt(var)
-
-    # Move the labels to {0, ..., L-1}
-    labels = numpy.unique(train_labels)
-    transform = {}
-    for i, l in enumerate(labels):
-        transform[l] = i
-    train_labels = numpy.vectorize(transform.get)(train_labels)
-    test_labels = numpy.vectorize(transform.get)(test_labels)
-
-    weka.core.jvm.stop()
-    return train, train_labels, test, test_labels
+# accuracy
+print("Test accuracy: " + str(classifier.score(test, test_labels)))
 
 
 
-
-# --------------------------------------------------------
-# get train dataset and test dataset
-train, test = load_weka_dataset(path='datasets/UEA/Multivariate2018_arff', dataset='BasicMotions')
-
-# numpy 三维转二维
-train_2d = numpy.reshape(train, (train.shape[0], train.shape[1]*train.shape[2]))
-test_2d = numpy.reshape(test, (test.shape[0], test.shape[1]*test.shape[2]))
-
-# numpy save csv 
-numpy.savetxt('output/train_2d.csv', train_2d, delimiter=',')
-numpy.savetxt('output/test_2d.csv', test_2d, delimiter=',')
-
-
-# --------------------------------------------------------
-# numpy load csv
-train_data = numpy.loadtxt('output/train_2d.csv', delimiter=',')
-test_data = numpy.loadtxt('output/test_2d.csv', delimiter=',')
-
-# numpy 二维转三维
 
 
 
