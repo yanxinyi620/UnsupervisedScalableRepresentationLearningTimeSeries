@@ -284,11 +284,12 @@ print(len([_ for _ in train_generator]))
 # cf.loss
 cf.loss = losses.triplet_loss.TripletLoss(
     compared_length=50, nb_random_samples=10, negative_penalty=1)
-# loss
+# loss parameters
 train1 = torch.from_numpy(train)
 train2 = train1.cuda(cf.gpu)
 batch = batch.cuda(cf.gpu)
 encoder = cf.encoder
+# loss
 loss = cf.loss(batch, encoder, train2, save_memory=False)
 loss.backward()
 
@@ -329,4 +330,68 @@ end_positive = beginning_positive + length_pos_neg
 beginning_samples_neg = numpy.random.randint(
     0, high=length - length_pos_neg + 1, size=(10, batch_size))
 
+# Anchors representations
+representation = encoder(torch.cat(
+    [batch[j: j + 1, :, beginning_batches[j]: beginning_batches[j] + random_length] 
+     for j in range(batch_size)]
+))
 
+# Positive samples representations
+positive_representation = encoder(torch.cat(
+    [batch[j: j + 1, :, end_positive[j] - length_pos_neg: end_positive[j]] 
+     for j in range(batch_size)]
+))
+
+size_representation = representation.size(1)
+# Positive loss: -logsigmoid of dot product between anchor and positive
+# representations
+loss = -torch.mean(torch.nn.functional.logsigmoid(torch.bmm(
+    representation.view(batch_size, 1, size_representation),
+    positive_representation.view(batch_size, size_representation, 1)
+)))
+
+multiplicative_ratio = 1 / 10
+for i in range(10):
+    # Negative loss: -logsigmoid of minus the dot product between
+    # anchor and negative representations
+    negative_representation = encoder(torch.cat(
+        [train2[samples[i, j]: samples[i, j] + 1][
+            :, :, beginning_samples_neg[i, j]: beginning_samples_neg[i, j] + length_pos_neg] 
+        for j in range(batch_size)]
+    ))
+    # loss
+    loss += multiplicative_ratio * -torch.mean(
+        torch.nn.functional.logsigmoid(-torch.bmm(
+            representation.view(batch_size, 1, size_representation),
+            negative_representation.view(batch_size, size_representation, 1)
+        ))
+    )
+print(loss)
+
+
+
+''' variables
+compared_length: 50
+nb_random_samples: 10
+negative_penalty: 1
+
+encoder: cf.encoder
+train/train2: torch.Size([40, 6, 100])
+batch: torch.Size([10, 6, 100])
+length: 50
+samples: (10, 10)
+length_pos_neg: 15 (pos and neg sampling length)
+random_length: 20 (anchors sampling length)
+beginning_batches: (10,)
+beginning_samples_pos: (10,)
+beginning_positive: (10,)
+end_positive: (10,)
+beginning_samples_neg: (10, 10)
+
+representation: (10, 320) (1 times sampling from batch)
+positive_representation: (10, 320) (1 times sampling from batch)
+size_representation: 320
+loss: Tensor(1.0330)
+multiplicative_ratio: 0.1
+negative_representation: (10, 320) (10 times sampling from train)
+'''
