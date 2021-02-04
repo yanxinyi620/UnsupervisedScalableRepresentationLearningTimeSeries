@@ -216,12 +216,19 @@ args.path = 'datasets/UEA/Multivariate2018_arff'
 args.cuda = True
 print(args)
 
+# get dataset(numpy.array)
 train, train_labels, test, test_labels = load_UEA_dataset(args.path, args.dataset)
 
-# classifier = fit_hyperparameters(args.hyper, train, train_labels, args.cuda, args.gpu, 
-#                                  save_memory=True)
+''' classifier and accuracy
+# classifier
+classifier = fit_hyperparameters(args.hyper, train, train_labels, args.cuda, args.gpu, 
+                                 save_memory=True)
+# accuracy
+print("Test accuracy: " + str(classifier.score(test, test_labels)))
+'''
 
-classifier = scikit_wrappers.CausalCNNEncoderClassifier()
+# CausalCNNEncoderClassifier
+cf = scikit_wrappers.CausalCNNEncoderClassifier()
 # Loads a given set of hyperparameters and fits a model with those
 hf = open(os.path.join(args.hyper), 'r')
 params = json.load(hf)
@@ -230,15 +237,96 @@ hf.close()
 params['in_channels'] = numpy.shape(train)[1]
 params['cuda'] = args.cuda
 params['gpu'] = args.gpu
-classifier.set_params(**params)
+cf.set_params(**params)
+
+''' fit and accuracy
 # fit
-classifier.fit(train, train_labels, save_memory=False, verbose=True)
+cf.fit(train, train_labels, save_memory=False, verbose=True)
 
-# accuracy
-print("Test accuracy: " + str(classifier.score(test, test_labels)))
+# accuracy for test
+features_test = cf.encode(X=test, batch_size=10)
+print("Test accuracy: " + str(cf.classifier.score(features_test, y=test_labels)))
+'''
+
+''' fit
+# encoder
+cf.encoder = cf.fit_encoder(X=train, y=train_labels, save_memory=False, verbose=True)
+# SVM classifier training
+features = cf.encode(X)
+cf.classifier = cf.fit_classifier(features, y=train_labels)
+'''
 
 
+import math
+import numpy
+import torch
+import sklearn
+import sklearn.svm
+import sklearn.externals
+import sklearn.model_selection
+
+import utils
+import losses
+import networks
+
+import joblib
 
 
+''' encoder
+'''
+# train
+train_torch_dataset = utils.Dataset(train)
+train_generator = torch.utils.data.DataLoader(train_torch_dataset, batch_size=10, shuffle=True)
+# batch
+for batch in train_generator:
+    break
+print(len([_ for _ in train_generator]))
+# cf.loss
+cf.loss = losses.triplet_loss.TripletLoss(
+    compared_length=50, nb_random_samples=10, negative_penalty=1)
+# loss
+train1 = torch.from_numpy(train)
+train2 = train1.cuda(cf.gpu)
+batch = batch.cuda(cf.gpu)
+encoder = cf.encoder
+loss = cf.loss(batch, encoder, train2, save_memory=False)
+loss.backward()
+
+
+''' loss
+'''
+batch_size = batch.size(0)
+train_size = train2.size(0)
+length = min(50, train2.size(2))
+
+# For each batch element, we pick nb_random_samples possible random
+# time series in the training set (choice of batches from where the
+# negative examples will be sampled)
+samples = numpy.random.choice(train_size, size=(10, batch_size))
+samples = torch.LongTensor(samples)
+
+# Choice of length of positive and negative samples
+length_pos_neg = numpy.random.randint(1, high=length + 1)
+
+# We choose for each batch example a random interval in the time
+# series, which is the 'anchor'
+# Length of anchors
+random_length = numpy.random.randint(length_pos_neg, high=length + 1)
+# Start of anchors
+beginning_batches = numpy.random.randint(0, high=length - random_length + 1, size=batch_size)
+
+# The positive samples are chosen at random in the chosen anchors
+# Start of positive samples in the anchors
+beginning_samples_pos = numpy.random.randint(
+    0, high=random_length - length_pos_neg + 1, size=batch_size)  
+# Start of positive samples in the batch examples
+beginning_positive = beginning_batches + beginning_samples_pos
+# End of positive samples in the batch examples
+end_positive = beginning_positive + length_pos_neg
+
+# We randomly choose nb_random_samples potential negative samples for
+# each batch example
+beginning_samples_neg = numpy.random.randint(
+    0, high=length - length_pos_neg + 1, size=(10, batch_size))
 
 
